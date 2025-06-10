@@ -74,6 +74,7 @@ impl SingleDispatchState {
         let cls_mro = get_obj_mro(&cls.clone())?;
         let mro = compose_mro(py, cls.clone(), self.registry.keys())?;
         let mut mro_match: Option<PyTypeReference> = None;
+        eprintln!("Finding impl for {cls}");
         for typ in mro.iter() {
             if self.registry.contains_key(typ) {
                 mro_match = Some(typ.clone_ref(py));
@@ -93,6 +94,7 @@ impl SingleDispatchState {
                     )));
                 }
                 mro_match = Some(m.clone_ref(py));
+                eprintln!("MRO match: {m}");
                 break;
             }
         }
@@ -104,6 +106,7 @@ impl SingleDispatchState {
             Some(f) => Ok(f),
             None => {
                 let obj_type = PyTypeReference::new(Builtins::cached(py).object_type.clone_ref(py));
+                eprintln!("Found impl for {cls}: {obj_type}");
                 match self.registry.get(&obj_type) {
                     Some(it) => Ok(it.clone_ref(py)),
                     None => Err(PyRuntimeError::new_err(format!(
@@ -117,6 +120,7 @@ impl SingleDispatchState {
     fn get_or_find_impl(&mut self, py: Python, cls: Bound<'_, PyAny>) -> PyResult<PyObject> {
         let free_cls = cls.unbind();
         let type_reference = PyTypeReference::new(free_cls.clone_ref(py));
+        eprintln!("Finding impl {type_reference}");
 
         match self.cache.get(&type_reference) {
             Some(handler) => Ok(handler.clone_ref(py)),
@@ -127,6 +131,7 @@ impl SingleDispatchState {
                 };
                 self.cache
                     .insert(type_reference, handler_for_cls.clone_ref(py));
+                eprintln!("Found new handler {handler_for_cls}");
                 Ok(handler_for_cls)
             }
         }
@@ -224,6 +229,7 @@ impl SingleDispatch {
         args: &Bound<'_, PyTuple>,
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Py<PyAny>> {
+        eprintln!("Calling");
         match obj.getattr(intern!(py, "__class__")) {
             Ok(cls) => {
                 let mut all_args = Vec::with_capacity(1 + args.len());
@@ -240,6 +246,7 @@ impl SingleDispatch {
     }
 
     fn dispatch(&self, py: Python<'_>, cls: Bound<'_, PyAny>) -> PyResult<PyObject> {
+        eprintln!("Dispatching");
         match self.lock.lock() {
             Ok(mut state) => {
                 if let Some(cache_token) = &state.cache_token {
