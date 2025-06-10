@@ -98,22 +98,21 @@ impl C3Mro<'_> {
     }
 }
 
-fn c3_boundary(py: Python, bases: &[PyTypeReference]) -> usize {
+fn c3_boundary(py: Python, bases: &[PyTypeReference]) -> PyResult<usize> {
     let mut boundary = 0;
 
     for (i, base) in bases.iter().rev().enumerate() {
         if base
             .wrapped()
             .bind(py)
-            .hasattr(intern!(py, "__abstractmethods__"))
-            .unwrap()
+            .hasattr(intern!(py, "__abstractmethods__"))?
         {
             boundary = bases.len() - i;
             break;
         }
     }
 
-    boundary
+    Ok(boundary)
 }
 
 fn c3_mro(
@@ -131,7 +130,7 @@ fn c3_mro(
         }
         Err(e) => return Err(e),
     };
-    let boundary = c3_boundary(py, &bases);
+    let boundary = c3_boundary(py, &bases)?;
     eprintln!("boundary = {boundary}");
     let base = &bases[boundary];
 
