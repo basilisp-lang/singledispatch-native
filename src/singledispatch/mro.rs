@@ -19,13 +19,13 @@ pub(crate) fn get_obj_mro(cls: &Bound<'_, PyAny>) -> PyResult<HashSet<PyTypeRefe
 }
 
 fn get_obj_subclasses(cls: &Bound<'_, PyAny>) -> PyResult<HashSet<PyTypeReference>> {
-    let mro: HashSet<_> = cls
+    let subclasses: HashSet<_> = cls
         .call_method0(intern!(cls.py(), "__subclasses__"))?
         .downcast::<PyTuple>()?
         .iter()
         .map(|item| PyTypeReference::new(item.unbind()))
         .collect();
-    Ok(mro)
+    Ok(subclasses)
 }
 
 fn c3_mro(py: Python, cls: Bound<'_, PyAny>, abcs: Vec<PyTypeReference>) -> PyResult<Vec<PyTypeReference>> {

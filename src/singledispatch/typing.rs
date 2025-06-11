@@ -76,8 +76,8 @@ impl TypingModule {
         self.get_origin.call1(py, PyTuple::new(py, [cls])?)
     }
 
-    pub fn is_union_type(&self, py: Python, cls: &Bound<'_, PyAny>) -> bool {
-        let origin_type_reference = PyTypeReference::new(cls.into_py_any(py).unwrap());
-        self.union_types.contains(&origin_type_reference)
+    pub fn is_union_type(&self, py: Python, cls: &Bound<'_, PyAny>) -> PyResult<bool> {
+        let origin_type_reference = PyTypeReference::new(cls.into_py_any(py)?);
+        Ok(self.union_types.contains(&origin_type_reference))
     }
 }
