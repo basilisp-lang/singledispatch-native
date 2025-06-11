@@ -1,3 +1,5 @@
+from collections.abc import Sequence
+
 import pytest
 from singledispatch_native import singledispatch
 
@@ -18,13 +20,27 @@ def _some_fun_str(o: int) -> str:
     return "It's an int!"
 
 
+@some_fun.register(Sequence)
+def _some_fun_sequence(l: Sequence) -> str:
+    return "Sequence: " + ", ".join(l)
+
+
+@some_fun.register(tuple)
+def _some_fun_sequence(l: tuple) -> str:
+    return "tuple: " + ", ".join(l)
+
+
 @pytest.mark.parametrize(
     "v,ret",
     [
         (None, "Got None <class 'NoneType'>"),
         ("val", "It's a string!"),
         (1, "It's an int!"),
-        # (True, "It's an int!"),
+        (True, "It's an int!"),
+        ([], "Sequence: "),
+        (["1"], "Sequence: 1"),
+        (["1", "2", "3"], "Sequence: 1, 2, 3"),
+        (("1", "2", "3"), "tuple: 1, 2, 3"),
     ]
 )
 def test_singledispatch(v, ret):

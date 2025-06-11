@@ -3,7 +3,7 @@ use crate::singledispatch::typeref::PyTypeReference;
 use crate::singledispatch::typing::TypingModule;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use pyo3::types::PyTuple;
+use pyo3::types::{PyList, PyTuple};
 use pyo3::{intern, Bound, PyObject, PyResult, Python};
 use std::borrow::Borrow;
 use std::cmp::Reverse;
@@ -37,7 +37,7 @@ fn get_obj_bases(cls: &Bound<'_, PyAny>) -> PyResult<Vec<PyTypeReference>> {
 fn get_obj_subclasses(cls: &Bound<'_, PyAny>) -> PyResult<HashSet<PyTypeReference>> {
     let subclasses: HashSet<_> = cls
         .call_method0(intern!(cls.py(), "__subclasses__"))?
-        .downcast::<PyTuple>()?
+        .downcast::<PyList>()?
         .iter()
         .map(|item| PyTypeReference::new(item.unbind()))
         .collect();
