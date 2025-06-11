@@ -39,7 +39,7 @@ impl Builtins {
     ) -> PyResult<bool> {
         let args = PyTuple::new(py, [cls, typ]);
         match self.issubclass_func.call1(py, args?) {
-            Ok(result) => Ok(result.downcast_bound::<PyBool>(py).unwrap().is_true()),
+            Ok(result) => Ok(result.downcast_bound::<PyBool>(py)?.is_true()),
             Err(e) => Err(e),
         }
     }

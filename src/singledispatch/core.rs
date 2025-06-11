@@ -8,18 +8,16 @@ use pyo3::prelude::*;
 use crate::singledispatch::builtins::Builtins;
 use pyo3::types::{PyDict, PyTuple, PyType};
 use pyo3::{
-    pyclass, pyfunction, pymethods, Bound, IntoPyObjectExt, Py, PyAny, PyObject, PyResult, Python,
+    intern, pyclass, pyfunction, pymethods, Bound, IntoPyObjectExt, Py, PyAny, PyObject, PyResult,
+    Python,
 };
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-fn get_abc_cache_token(py: Python) -> Bound<'_, PyAny> {
-    py.import("abc")
-        .unwrap()
-        .getattr("get_cache_token")
-        .unwrap()
+fn get_abc_cache_token(py: Python) -> PyResult<Bound<'_, PyAny>> {
+    py.import(intern!(py, "abc"))?
+        .getattr(intern!(py, "get_cache_token"))?
         .call0()
-        .unwrap()
 }
 
 fn valid_dispatch_types(py: Python, cls: &Bound<'_, PyAny>) -> PyResult<Vec<Py<PyType>>> {
@@ -28,7 +26,7 @@ fn valid_dispatch_types(py: Python, cls: &Bound<'_, PyAny>) -> PyResult<Vec<Py<P
     } else {
         let typing_module = TypingModule::cached(py);
         if let Ok(origin) = typing_module.get_origin(py, cls) {
-            if typing_module.is_union_type(py, origin.bind(py)) {
+            if typing_module.is_union_type(py, origin.bind(py))? {
                 if let Ok(type_args) = typing_module.get_args(py, cls) {
                     let py_tuple = type_args.bind(py);
                     let mut dispatch_types = Vec::with_capacity(py_tuple.len());
@@ -73,7 +71,7 @@ struct SingleDispatchState {
 
 impl SingleDispatchState {
     fn find_impl(&mut self, py: Python, cls: Bound<'_, PyAny>) -> PyResult<PyObject> {
-        let cls_mro = get_obj_mro(&cls.clone()).unwrap();
+        let cls_mro = get_obj_mro(&cls.clone())?;
         let mro = compose_mro(py, cls.clone(), self.registry.keys())?;
         let mut mro_match: Option<PyTypeReference> = None;
         for typ in mro.iter() {
@@ -81,29 +79,44 @@ impl SingleDispatchState {
                 mro_match = Some(typ.clone_ref(py));
             }
 
-            if mro_match.is_some() {
-                let m = &mro_match.unwrap().clone_ref(py);
-                if self.registry.contains_key(typ)
-                    && !cls_mro.contains(typ)
-                    && !cls_mro.contains(m)
-                    && Builtins::cached(py)
-                        .issubclass(py, m.wrapped().bind(py), typ.wrapped().bind(py))
-                        .is_ok_and(|res| res)
-                {
-                    return Err(PyRuntimeError::new_err(format!(
-                        "Ambiguous dispatch: {m} or {typ}"
-                    )));
+            match mro_match {
+                Some(m) => {
+                    let m = &m.clone_ref(py);
+                    if self.registry.contains_key(typ)
+                        && !cls_mro.contains(typ)
+                        && !cls_mro.contains(m)
+                        && Builtins::cached(py)
+                            .issubclass(py, m.wrapped().bind(py), typ.wrapped().bind(py))
+                            .is_ok_and(|res| res)
+                    {
+                        return Err(PyRuntimeError::new_err(format!(
+                            "Ambiguous dispatch: {m} or {typ}"
+                        )));
+                    }
+                    mro_match = Some(m.clone_ref(py));
+                    break;
                 }
-                mro_match = Some(m.clone_ref(py));
-                break;
+                _ => {}
             }
         }
-        match mro_match {
-            Some(_) => match self.registry.get(&mro_match.unwrap()) {
-                Some(&ref it) => Ok(it.clone_ref(py)),
-                None => Ok(py.None()),
+        let impl_fn = match mro_match {
+            Some(v) => match self.registry.get(&v) {
+                Some(&ref it) => Some(it.clone_ref(py)),
+                None => None,
             },
-            None => Ok(py.None()),
+            None => None,
+        };
+        match impl_fn {
+            Some(f) => Ok(f),
+            None => {
+                let obj_type = PyTypeReference::new(Builtins::cached(py).object_type.clone_ref(py));
+                match self.registry.get(&obj_type) {
+                    Some(it) => Ok(it.clone_ref(py)),
+                    None => Err(PyRuntimeError::new_err(format!(
+                        "No dispatch function found for {cls}!"
+                    ))),
+                }
+            }
         }
     }
 
@@ -142,7 +155,7 @@ impl SingleDispatch {
         match self.lock.lock() {
             Ok(mut state) => {
                 let unbound_func = func.unbind();
-                if typing_module.is_union_type(py, &cls) {
+                if typing_module.is_union_type(py, &cls)? {
                     match typing_module.get_args(py, &cls) {
                         Ok(tuple) => {
                             for tp in tuple.bind(py).iter() {
@@ -161,14 +174,16 @@ impl SingleDispatch {
                     );
                 }
                 if state.cache_token.is_none() {
-                    if let Ok(_) = unbound_func.getattr(py, "__abstractmethods__") {
-                        state.cache_token = Some(get_abc_cache_token(py).unbind());
+                    if let Ok(_) = unbound_func.getattr(py, intern!(py, "__abstractmethods__")) {
+                        state.cache_token = Some(get_abc_cache_token(py)?.unbind());
                     }
                 }
                 state.cache.clear();
                 Ok(unbound_func)
             }
-            Err(_) => panic!("Singledispatch mutex poisoned!"),
+            Err(e) => Err(PyRuntimeError::new_err(format!(
+                "Singledispatch mutex poisoned: {e}"
+            ))),
         }
     }
 
@@ -178,7 +193,7 @@ impl SingleDispatch {
         cls: Bound<'_, PyAny>,
         func: Bound<'_, PyAny>,
     ) -> PyResult<PyObject> {
-        match func.getattr("__annotations__") {
+        match func.getattr(intern!(_py, "__annotations__")) {
             Ok(_annotations) => Err(PyNotImplementedError::new_err("Oops!")),
             Err(_) => Err(PyTypeError::new_err(
                 format!("Invalid first argument to `register()`: {cls}. Use either `@register(some_class)` or plain `@register` on an annotated function."),
@@ -213,7 +228,7 @@ impl SingleDispatch {
         args: &Bound<'_, PyTuple>,
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Py<PyAny>> {
-        match obj.getattr("__class__") {
+        match obj.getattr(intern!(py, "__class__")) {
             Ok(cls) => {
                 let mut all_args = Vec::with_capacity(1 + args.len());
                 all_args.insert(0, obj);
@@ -221,7 +236,7 @@ impl SingleDispatch {
 
                 match self.dispatch(py, cls) {
                     Ok(handler) => handler.call(py, PyTuple::new(py, all_args)?, kwargs),
-                    Err(_) => panic!("no handler for singledispatch"),
+                    Err(e) => Err(e),
                 }
             }
             Err(_) => Err(PyTypeError::new_err("expected __class__ attribute for obj")),
@@ -233,7 +248,7 @@ impl SingleDispatch {
             Ok(mut state) => {
                 match &state.cache_token {
                     Some(cache_token) => {
-                        let current_token = get_abc_cache_token(py);
+                        let current_token = get_abc_cache_token(py)?;
                         match current_token.rich_compare(cache_token.bind(py), CompareOp::Eq) {
                             Ok(_) => {
                                 state.cache.clear();
@@ -247,7 +262,9 @@ impl SingleDispatch {
 
                 state.get_or_find_impl(py, cls)
             }
-            Err(_) => panic!("Singledispatch mutex poisoned!"),
+            Err(e) => Err(PyRuntimeError::new_err(format!(
+                "Singledispatch mutex poisoned: {e}"
+            ))),
         }
     }
 
@@ -266,7 +283,7 @@ impl SingleDispatch {
                     .into_pyobject(py)
                 {
                     Ok(v) => Ok(v.into_py_any(py)?),
-                    Err(_) => Err(PyRuntimeError::new_err("")),
+                    Err(e) => Err(e),
                 },
             }
         } else {
