@@ -5,6 +5,7 @@ use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 use pyo3::{intern, Bound, PyObject, PyResult, Python};
+use std::borrow::Borrow;
 use std::cmp::Reverse;
 use std::collections::hash_map::Keys;
 use std::collections::HashSet;
@@ -115,6 +116,26 @@ fn c3_boundary(py: Python, bases: &[PyTypeReference]) -> PyResult<usize> {
     Ok(boundary)
 }
 
+fn sub_c3_mro<I, G>(
+    py: Python,
+    bases: I,
+    abcs: &Vec<&PyTypeReference>,
+) -> PyResult<Vec<Vec<PyTypeReference>>>
+where
+    G: Borrow<PyTypeReference>,
+    I: Iterator<Item = G>,
+{
+    let mut v: Vec<Vec<PyTypeReference>> = Vec::new();
+    for b in bases {
+        v.push(c3_mro(
+            py,
+            b.borrow().wrapped().bind(py),
+            abcs.iter().map(|abc| abc.clone_ref(py)).collect(),
+        )?);
+    }
+    Ok(v)
+}
+
 fn c3_mro(
     py: Python,
     cls: &Bound<'_, PyAny>,
@@ -161,34 +182,13 @@ fn c3_mro(
     let mut cls_ref = vec![PyTypeReference::new(cls.clone().unbind())];
     mros.push(&mut cls_ref);
 
-    let mut explicit_bases_mro = Vec::from_iter(explicit_bases.iter().map(|b| {
-        c3_mro(
-            py,
-            b.wrapped().bind(py),
-            new_abcs.iter().map(|abc| abc.clone_ref(py)).collect(),
-        )
-        .unwrap()
-    }));
+    let mut explicit_bases_mro = sub_c3_mro(py, explicit_bases.iter(), &new_abcs)?;
     mros.extend(&mut explicit_bases_mro);
 
-    let mut abstract_bases_mro = Vec::from_iter(abstract_bases.iter().map(|b| {
-        c3_mro(
-            py,
-            b.wrapped().bind(py),
-            new_abcs.iter().map(|abc| abc.clone_ref(py)).collect(),
-        )
-        .unwrap()
-    }));
+    let mut abstract_bases_mro = sub_c3_mro(py, abstract_bases.iter().map(|v| *v), &new_abcs)?;
     mros.extend(&mut abstract_bases_mro);
 
-    let mut other_bases_mro = Vec::from_iter(other_bases.iter().map(|b| {
-        c3_mro(
-            py,
-            b.wrapped().bind(py),
-            new_abcs.iter().map(|abc| abc.clone_ref(py)).collect(),
-        )
-        .unwrap()
-    }));
+    let mut other_bases_mro = sub_c3_mro(py, other_bases.iter(), &new_abcs)?;
     mros.extend(&mut other_bases_mro);
 
     let mut explicit_bases_cloned = Vec::from_iter(explicit_bases.iter().map(|b| b.clone_ref(py)));
