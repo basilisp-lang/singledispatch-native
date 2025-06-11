@@ -3,8 +3,9 @@ use crate::singledispatch::typeref::PyTypeReference;
 use crate::singledispatch::typing::TypingModule;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use pyo3::types::PyTuple;
 use pyo3::{intern, Bound, PyAny, PyResult, Python};
+
+use pyo3::types::{PyList, PyTuple};
 use std::borrow::Borrow;
 use std::cmp::Reverse;
 use std::collections::hash_map::Keys;
