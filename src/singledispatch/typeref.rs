@@ -1,5 +1,5 @@
 use pyo3::{PyObject, Python};
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 
 pub struct PyTypeReference {
@@ -19,6 +19,12 @@ impl PyTypeReference {
         Self {
             wrapped: self.wrapped.clone_ref(py),
         }
+    }
+}
+
+impl Debug for PyTypeReference {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.wrapped, f)
     }
 }
 

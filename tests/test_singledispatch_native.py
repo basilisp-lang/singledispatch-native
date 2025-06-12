@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 
 import pytest
+#from functools import singledispatch
 from singledispatch_native import singledispatch
 
 from typing import Any
@@ -16,7 +17,7 @@ def _some_fun_str(o: str) -> str:
 
 
 @some_fun.register(int)
-def _some_fun_str(o: int) -> str:
+def _some_fun_int(o: int) -> str:
     return "It's an int!"
 
 
@@ -26,7 +27,7 @@ def _some_fun_sequence(l: Sequence) -> str:
 
 
 @some_fun.register(tuple)
-def _some_fun_sequence(l: tuple) -> str:
+def _some_fun_tuple(l: tuple) -> str:
     return "tuple: " + ", ".join(l)
 
 

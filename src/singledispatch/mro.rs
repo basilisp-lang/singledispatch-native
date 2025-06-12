@@ -151,20 +151,20 @@ fn c3_mro(
         }
         Err(e) => return Err(e),
     };
+    eprintln!("bases = {bases:#?}");
     let boundary = c3_boundary(py, &bases)?;
     eprintln!("boundary = {boundary}");
-    let base = &bases[boundary];
 
     let (explicit_bases, other_bases) = bases.split_at(boundary);
     let abstract_bases: Vec<_> = abcs
         .iter()
         .flat_map(|abc| {
             if Builtins::cached(py)
-                .issubclass(py, cls, base.wrapped().bind(py))
+                .issubclass(py, cls, abc.wrapped().bind(py))
                 .unwrap()
                 && !bases.iter().any(|b| {
                     Builtins::cached(py)
-                        .issubclass(py, b.wrapped().bind(py), base.wrapped().bind(py))
+                        .issubclass(py, b.wrapped().bind(py), abc.wrapped().bind(py))
                         .unwrap()
                 })
             {
@@ -174,6 +174,9 @@ fn c3_mro(
             }
         })
         .collect();
+    eprintln!("explict_bases = {explicit_bases:#?}");
+    eprintln!("other_bases = {other_bases:#?}");
+    eprintln!("abstract_bases = {abstract_bases:#?}");
 
     let new_abcs: Vec<_> = abcs.iter().filter(|c| abstract_bases.contains(c)).collect();
 
@@ -186,6 +189,7 @@ fn c3_mro(
     mros.extend(&mut explicit_bases_mro);
 
     let mut abstract_bases_mro = sub_c3_mro(py, abstract_bases.iter().map(|v| *v), &new_abcs)?;
+    eprintln!("abstract_bases_mro = {abstract_bases_mro:#?}");
     mros.extend(&mut abstract_bases_mro);
 
     let mut other_bases_mro = sub_c3_mro(py, other_bases.iter(), &new_abcs)?;
@@ -212,7 +216,9 @@ pub(crate) fn compose_mro(
     let typing = TypingModule::cached(py);
 
     let bases: HashSet<_> = get_obj_mro(&cls)?;
+    eprintln!("bases = {bases:#?}");
     let registered_types: HashSet<_> = types.collect();
+    eprintln!("registered_types = {registered_types:#?}");
     let eligible_types: HashSet<_> = registered_types
         .iter()
         .filter(|&tref| {
@@ -235,6 +241,7 @@ pub(crate) fn compose_mro(
         })
         .copied()
         .collect();
+    eprintln!("eligible_types = {eligible_types:#?}");
     let mut mro: Vec<PyTypeReference> = Vec::new();
     eligible_types.iter().for_each(|&tref| {
         // Subclasses of the ABCs in *types* which are also implemented by
@@ -244,6 +251,7 @@ pub(crate) fn compose_mro(
             .unwrap()
             .iter()
             .filter(|subclass| {
+                eprintln!("subclass = {subclass:#?}");
                 let typ = subclass.wrapped();
                 let tref = PyTypeReference::new(typ.clone_ref(py));
                 !bases.contains(&tref)
@@ -273,6 +281,9 @@ pub(crate) fn compose_mro(
             });
         }
     });
+    eprintln!("Pre-mro candidates {mro:#?}");
 
-    c3_mro(py, &cls, mro)
+    let final_rmo = c3_mro(py, &cls, mro);
+    eprintln!("MRO for {cls}: {final_rmo:#?}");
+    final_rmo
 }
