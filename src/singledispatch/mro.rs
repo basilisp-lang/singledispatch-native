@@ -28,7 +28,11 @@ fn get_obj_subclasses(cls: &Bound<'_, PyAny>) -> PyResult<HashSet<PyTypeReferenc
     Ok(subclasses)
 }
 
-fn c3_mro(py: Python, cls: Bound<'_, PyAny>, abcs: Vec<PyTypeReference>) -> PyResult<Vec<PyTypeReference>> {
+fn c3_mro(
+    py: Python,
+    cls: Bound<'_, PyAny>,
+    abcs: Vec<PyTypeReference>,
+) -> PyResult<Vec<PyTypeReference>> {
     Ok(abcs)
 }
 
@@ -62,7 +66,7 @@ pub(crate) fn compose_mro(
                 *tref != other && other_mro.contains(tref)
             })
         })
-        .map(|tref| *tref)
+        .copied()
         .collect();
     let mut mro: Vec<PyTypeReference> = Vec::new();
     eligible_types.iter().for_each(|&tref| {
@@ -96,7 +100,7 @@ pub(crate) fn compose_mro(
         } else {
             found_subclasses.sort_by_key(|s| Reverse(s.len()));
             found_subclasses.iter().flatten().for_each(|tref| {
-                if !mro.contains(&tref) {
+                if !mro.contains(tref) {
                     mro.push(tref.clone_ref(py));
                 }
             });

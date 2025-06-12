@@ -34,6 +34,14 @@ jobs:
       - name: Run tests
         run: uv run pytest
 
+  ci-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Rust formatting
+        run: |
+          cargo fmt --check
+
   linux:
     runs-on: ${{ matrix.platform.runner }}
     needs: [ test ]

@@ -79,31 +79,25 @@ impl SingleDispatchState {
                 mro_match = Some(typ.clone_ref(py));
             }
 
-            match mro_match {
-                Some(m) => {
-                    let m = &m.clone_ref(py);
-                    if self.registry.contains_key(typ)
-                        && !cls_mro.contains(typ)
-                        && !cls_mro.contains(m)
-                        && Builtins::cached(py)
-                            .issubclass(py, m.wrapped().bind(py), typ.wrapped().bind(py))
-                            .is_ok_and(|res| res)
-                    {
-                        return Err(PyRuntimeError::new_err(format!(
-                            "Ambiguous dispatch: {m} or {typ}"
-                        )));
-                    }
-                    mro_match = Some(m.clone_ref(py));
-                    break;
+            if let Some(m) = mro_match {
+                let m = &m.clone_ref(py);
+                if self.registry.contains_key(typ)
+                    && !cls_mro.contains(typ)
+                    && !cls_mro.contains(m)
+                    && Builtins::cached(py)
+                        .issubclass(py, m.wrapped().bind(py), typ.wrapped().bind(py))
+                        .is_ok_and(|res| res)
+                {
+                    return Err(PyRuntimeError::new_err(format!(
+                        "Ambiguous dispatch: {m} or {typ}"
+                    )));
                 }
-                _ => {}
+                mro_match = Some(m.clone_ref(py));
+                break;
             }
         }
         let impl_fn = match mro_match {
-            Some(v) => match self.registry.get(&v) {
-                Some(&ref it) => Some(it.clone_ref(py)),
-                None => None,
-            },
+            Some(v) => self.registry.get(&v).map(|it| it.clone_ref(py)),
             None => None,
         };
         match impl_fn {
@@ -173,10 +167,12 @@ impl SingleDispatch {
                         unbound_func.clone_ref(py),
                     );
                 }
-                if state.cache_token.is_none() {
-                    if let Ok(_) = unbound_func.getattr(py, intern!(py, "__abstractmethods__")) {
-                        state.cache_token = Some(get_abc_cache_token(py)?.unbind());
-                    }
+                if state.cache_token.is_none()
+                    && unbound_func
+                        .getattr(py, intern!(py, "__abstractmethods__"))
+                        .is_ok()
+                {
+                    state.cache_token = Some(get_abc_cache_token(py)?.unbind());
                 }
                 state.cache.clear();
                 Ok(unbound_func)
@@ -246,18 +242,15 @@ impl SingleDispatch {
     fn dispatch(&self, py: Python<'_>, cls: Bound<'_, PyAny>) -> PyResult<PyObject> {
         match self.lock.lock() {
             Ok(mut state) => {
-                match &state.cache_token {
-                    Some(cache_token) => {
-                        let current_token = get_abc_cache_token(py)?;
-                        match current_token.rich_compare(cache_token.bind(py), CompareOp::Eq) {
-                            Ok(_) => {
-                                state.cache.clear();
-                                state.cache_token = Some(current_token.unbind());
-                            }
-                            _ => (),
-                        }
+                if let Some(cache_token) = &state.cache_token {
+                    let current_token = get_abc_cache_token(py)?;
+                    if current_token
+                        .rich_compare(cache_token.bind(py), CompareOp::Eq)
+                        .is_ok()
+                    {
+                        state.cache.clear();
+                        state.cache_token = Some(current_token.unbind());
                     }
-                    _ => (),
                 }
 
                 state.get_or_find_impl(py, cls)
