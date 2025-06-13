@@ -60,38 +60,28 @@ fn find_merge_candidate(py: Python, seqs: &[&mut Vec<PyTypeReference>]) -> Optio
     candidate.map(|c| c.clone_ref(py))
 }
 
-struct C3Mro<'a> {
-    seqs: &'a mut Vec<&'a mut Vec<PyTypeReference>>,
-}
-
-impl C3Mro<'_> {
-    fn for_abcs<'a>(
-        py: Python,
-        abcs: &'a mut Vec<&'a mut Vec<PyTypeReference>>,
-    ) -> PyResult<Vec<PyTypeReference>> {
-        C3Mro { seqs: abcs }.merge(py)
-    }
-
-    fn merge(&mut self, py: Python) -> PyResult<Vec<PyTypeReference>> {
-        let mut result: Vec<PyTypeReference> = Vec::new();
-        loop {
-            let seqs = &mut self.seqs;
-            seqs.retain(|seq| !seq.is_empty());
-            if seqs.is_empty() {
-                return Ok(result);
-            }
-            match find_merge_candidate(py, seqs.as_slice()) {
-                Some(c) => {
-                    for i in 0..seqs.len() {
-                        let seq = &mut self.seqs[i];
-                        if seq[0].eq(&c) {
-                            seq.remove(0);
-                        }
+fn merge_mro(
+    seqs: &mut Vec<&mut Vec<PyTypeReference>>,
+    py: Python,
+) -> PyResult<Vec<PyTypeReference>> {
+    let mut result: Vec<PyTypeReference> = Vec::new();
+    loop {
+        //let seqs = seqs;
+        seqs.retain(|seq| !seq.is_empty());
+        if seqs.is_empty() {
+            return Ok(result);
+        }
+        match find_merge_candidate(py, seqs.as_slice()) {
+            Some(c) => {
+                for i in 0..seqs.len() {
+                    let seq = &mut seqs[i];
+                    if seq[0].eq(&c) {
+                        seq.remove(0);
                     }
-                    result.push(c);
                 }
-                None => return Err(PyRuntimeError::new_err("Inconsistent hierarchy")),
+                result.push(c);
             }
+            None => return Err(PyRuntimeError::new_err("Inconsistent hierarchy")),
         }
     }
 }
@@ -211,7 +201,7 @@ fn c3_mro(
     let mut other_bases_cloned = Vec::from_iter(other_bases.iter().map(|b| b.clone_ref(py)));
     mros.push(&mut other_bases_cloned);
 
-    C3Mro::for_abcs(py, &mut mros)
+    merge_mro(&mut mros, py)
 }
 
 pub(crate) fn compose_mro(
