@@ -86,7 +86,7 @@ impl SingleDispatchState {
                     && !cls_mro.contains(m)
                     && Builtins::cached(py)
                         .issubclass(py, m.wrapped().bind(py), typ.wrapped().bind(py))
-                        .is_ok_and(|res| res)
+                        .is_ok_and(|res| !res)
                 {
                     return Err(PyRuntimeError::new_err(format!(
                         "Ambiguous dispatch: {m} or {typ}"
