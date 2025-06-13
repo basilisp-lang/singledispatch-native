@@ -21,16 +21,13 @@ pub(crate) fn get_obj_mro(cls: &Bound<'_, PyAny>) -> PyResult<HashSet<PyTypeRefe
 }
 
 fn get_obj_bases(cls: &Bound<'_, PyAny>) -> PyResult<Vec<PyTypeReference>> {
-    match cls.getattr_opt(intern!(cls.py(), "__bases__")) {
-        Ok(opt) => match opt {
-            Some(b) => Ok(b
-                .downcast::<PyTuple>()?
-                .iter()
-                .map(|item| PyTypeReference::new(item.unbind()))
-                .collect()),
-            None => Ok(Vec::new()),
-        },
-        Err(e) => Err(e),
+    match cls.getattr_opt(intern!(cls.py(), "__bases__"))? {
+        Some(b) => Ok(b
+            .downcast::<PyTuple>()?
+            .iter()
+            .map(|item| PyTypeReference::new(item.unbind()))
+            .collect()),
+        None => Ok(Vec::new()),
     }
 }
 
