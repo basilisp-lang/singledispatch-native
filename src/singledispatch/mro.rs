@@ -141,6 +141,8 @@ fn c3_mro(
     cls: &Bound<'_, PyAny>,
     abcs: Vec<PyTypeReference>,
 ) -> PyResult<Vec<PyTypeReference>> {
+    eprintln!("cls = {cls:#?}");
+    eprintln!("abcs = {abcs:#?}");
     let bases = match get_obj_bases(cls) {
         Ok(b) => {
             if !b.is_empty() {
@@ -168,7 +170,7 @@ fn c3_mro(
                         .unwrap()
                 })
             {
-                vec![abc]
+                vec![abc.clone_ref(py)]
             } else {
                 vec![]
             }
@@ -178,7 +180,11 @@ fn c3_mro(
     eprintln!("other_bases = {other_bases:#?}");
     eprintln!("abstract_bases = {abstract_bases:#?}");
 
-    let new_abcs: Vec<_> = abcs.iter().filter(|c| abstract_bases.contains(c)).collect();
+    let new_abcs: Vec<_> = abcs
+        .iter()
+        .filter(|&c| !abstract_bases.contains(c))
+        .collect();
+    eprintln!("new_abcs = {new_abcs:#?}");
 
     let mut mros: Vec<&mut Vec<PyTypeReference>> = Vec::new();
 
@@ -188,7 +194,11 @@ fn c3_mro(
     let mut explicit_bases_mro = sub_c3_mro(py, explicit_bases.iter(), &new_abcs)?;
     mros.extend(&mut explicit_bases_mro);
 
-    let mut abstract_bases_mro = sub_c3_mro(py, abstract_bases.iter().map(|v| *v), &new_abcs)?;
+    let mut abstract_bases_mro = sub_c3_mro(
+        py,
+        abstract_bases.iter().map(|v| v.clone_ref(py)),
+        &new_abcs,
+    )?;
     eprintln!("abstract_bases_mro = {abstract_bases_mro:#?}");
     mros.extend(&mut abstract_bases_mro);
 
