@@ -3,7 +3,7 @@ name = "singledispatch-native"
 version = "0.1.0"
 description = "Native version of `functools.singledispatch` written in Rust"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = []
 
 [dependency-groups]
