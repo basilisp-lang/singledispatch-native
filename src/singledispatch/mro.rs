@@ -24,7 +24,7 @@ pub(crate) fn get_obj_mro(cls: &Bound<'_, PyAny>) -> PyResult<HashSet<PyTypeRefe
 fn get_obj_bases(cls: &Bound<'_, PyAny>) -> PyResult<Vec<PyTypeReference>> {
     match cls.getattr_opt(intern!(cls.py(), "__bases__"))? {
         Some(b) => Ok(b
-            .downcast::<PyTuple>()?
+            .cast::<PyTuple>()?
             .iter()
             .map(|item| PyTypeReference::new(item.unbind()))
             .collect()),
@@ -35,7 +35,7 @@ fn get_obj_bases(cls: &Bound<'_, PyAny>) -> PyResult<Vec<PyTypeReference>> {
 fn get_obj_subclasses(cls: &Bound<'_, PyAny>) -> PyResult<HashSet<PyTypeReference>> {
     let subclasses: HashSet<_> = cls
         .call_method0(intern!(cls.py(), "__subclasses__"))?
-        .cast::<PyTuple>()?
+        .cast::<PyList>()?
         .iter()
         .map(|item| PyTypeReference::new(item.unbind()))
         .collect();
@@ -129,8 +129,8 @@ fn c3_mro(
     cls: &Bound<'_, PyAny>,
     abcs: Vec<PyTypeReference>,
 ) -> PyResult<Vec<PyTypeReference>> {
-    eprintln!("cls = {cls:#?}");
-    eprintln!("abcs = {abcs:#?}");
+    // eprintln!("cls = {cls:#?}");
+    // eprintln!("abcs = {abcs:#?}");
     let bases = match get_obj_bases(cls) {
         Ok(b) => {
             if !b.is_empty() {
@@ -141,9 +141,9 @@ fn c3_mro(
         }
         Err(e) => return Err(e),
     };
-    eprintln!("bases = {bases:#?}");
+    // eprintln!("bases = {bases:#?}");
     let boundary = c3_boundary(py, &bases)?;
-    eprintln!("boundary = {boundary}");
+    // eprintln!("boundary = {boundary}");
 
     let (explicit_bases, other_bases) = bases.split_at(boundary);
     let abstract_bases: Vec<_> = abcs
@@ -164,15 +164,15 @@ fn c3_mro(
             }
         })
         .collect();
-    eprintln!("explict_bases = {explicit_bases:#?}");
-    eprintln!("other_bases = {other_bases:#?}");
-    eprintln!("abstract_bases = {abstract_bases:#?}");
+    // eprintln!("explict_bases = {explicit_bases:#?}");
+    // eprintln!("other_bases = {other_bases:#?}");
+    // eprintln!("abstract_bases = {abstract_bases:#?}");
 
     let new_abcs: Vec<_> = abcs
         .iter()
         .filter(|&c| !abstract_bases.contains(c))
         .collect();
-    eprintln!("new_abcs = {new_abcs:#?}");
+    // eprintln!("new_abcs = {new_abcs:#?}");
 
     let mut mros: Vec<&mut Vec<PyTypeReference>> = Vec::new();
 
@@ -187,7 +187,7 @@ fn c3_mro(
         abstract_bases.iter().map(|v| v.clone_ref(py)),
         &new_abcs,
     )?;
-    eprintln!("abstract_bases_mro = {abstract_bases_mro:#?}");
+    // eprintln!("abstract_bases_mro = {abstract_bases_mro:#?}");
     mros.extend(&mut abstract_bases_mro);
 
     let mut other_bases_mro = sub_c3_mro(py, other_bases.iter(), &new_abcs)?;
@@ -214,9 +214,9 @@ pub(crate) fn compose_mro(
     let typing = TypingModule::cached(py);
 
     let bases: HashSet<_> = get_obj_mro(&cls)?;
-    eprintln!("bases = {bases:#?}");
+    // eprintln!("bases = {bases:#?}");
     let registered_types: HashSet<_> = types.collect();
-    eprintln!("registered_types = {registered_types:#?}");
+    // eprintln!("registered_types = {registered_types:#?}");
     let eligible_types: HashSet<_> = registered_types
         .iter()
         .filter(|&tref| {
@@ -239,7 +239,7 @@ pub(crate) fn compose_mro(
         })
         .copied()
         .collect();
-    eprintln!("eligible_types = {eligible_types:#?}");
+    // eprintln!("eligible_types = {eligible_types:#?}");
     let mut mro: Vec<PyTypeReference> = Vec::new();
     eligible_types.iter().for_each(|&tref| {
         // Subclasses of the ABCs in *types* which are also implemented by
@@ -249,7 +249,7 @@ pub(crate) fn compose_mro(
             .unwrap()
             .iter()
             .filter(|subclass| {
-                eprintln!("subclass = {subclass:#?}");
+                // eprintln!("subclass = {subclass:#?}");
                 let typ = subclass.wrapped();
                 let tref = PyTypeReference::new(typ.clone_ref(py));
                 !bases.contains(&tref)
@@ -279,9 +279,9 @@ pub(crate) fn compose_mro(
             });
         }
     });
-    eprintln!("Pre-mro candidates {mro:#?}");
+    // eprintln!("Pre-mro candidates {mro:#?}");
 
     let final_rmo = c3_mro(py, &cls, mro);
-    eprintln!("MRO for {cls}: {final_rmo:#?}");
+    // eprintln!("MRO for {cls}: {final_rmo:#?}");
     final_rmo
 }
