@@ -8,20 +8,19 @@ use pyo3::prelude::*;
 use crate::singledispatch::builtins::Builtins;
 use pyo3::types::{PyDict, PyTuple, PyType};
 use pyo3::{
-    intern, pyclass, pyfunction, pymethods, Bound, IntoPyObjectExt, Py, PyAny, PyObject, PyResult,
-    Python,
+    intern, pyclass, pyfunction, pymethods, Bound, IntoPyObjectExt, Py, PyAny, PyResult, Python,
 };
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-fn get_abc_cache_token(py: Python) -> PyResult<Bound<'_, PyAny>> {
+fn get_abc_cache_token(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     py.import(intern!(py, "abc"))?
         .getattr(intern!(py, "get_cache_token"))?
         .call0()
 }
 
 fn valid_dispatch_types(py: Python, cls: &Bound<'_, PyAny>) -> PyResult<Vec<Py<PyType>>> {
-    if let Ok(typ) = cls.downcast::<PyType>() {
+    if let Ok(typ) = cls.cast::<PyType>() {
         Ok(Vec::from([typ.clone().unbind()]))
     } else {
         let typing_module = TypingModule::cached(py);
@@ -31,7 +30,7 @@ fn valid_dispatch_types(py: Python, cls: &Bound<'_, PyAny>) -> PyResult<Vec<Py<P
                     let py_tuple = type_args.bind(py);
                     let mut dispatch_types = Vec::with_capacity(py_tuple.len());
                     for (i, item) in py_tuple.iter().enumerate() {
-                        match item.downcast::<PyType>() {
+                        match item.cast::<PyType>() {
                             Ok(typ) => {
                                 dispatch_types.insert(i, typ.clone().unbind());
                             }
@@ -64,13 +63,13 @@ fn is_valid_dispatch_type(py: Python, cls: &Bound<'_, PyAny>) -> bool {
 }
 
 struct SingleDispatchState {
-    registry: HashMap<PyTypeReference, PyObject>,
-    cache: HashMap<PyTypeReference, PyObject>,
-    cache_token: Option<PyObject>,
+    registry: HashMap<PyTypeReference, Py<PyAny>>,
+    cache: HashMap<PyTypeReference, Py<PyAny>>,
+    cache_token: Option<Py<PyAny>>,
 }
 
 impl SingleDispatchState {
-    fn find_impl(&mut self, py: Python, cls: Bound<'_, PyAny>) -> PyResult<PyObject> {
+    fn find_impl(&mut self, py: Python, cls: Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         let cls_mro = get_obj_mro(&cls.clone())?;
         let mro = compose_mro(py, cls.clone(), self.registry.keys())?;
         let mut mro_match: Option<PyTypeReference> = None;
@@ -114,7 +113,7 @@ impl SingleDispatchState {
         }
     }
 
-    fn get_or_find_impl(&mut self, py: Python, cls: Bound<'_, PyAny>) -> PyResult<PyObject> {
+    fn get_or_find_impl(&mut self, py: Python, cls: Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         let free_cls = cls.unbind();
         let type_reference = PyTypeReference::new(free_cls.clone_ref(py));
 
@@ -144,7 +143,7 @@ impl SingleDispatch {
         py: Python<'_>,
         cls: Bound<'_, PyAny>,
         func: Bound<'_, PyAny>,
-    ) -> PyResult<PyObject> {
+    ) -> PyResult<Py<PyAny>> {
         let typing_module = TypingModule::cached(py);
         match self.lock.lock() {
             Ok(mut state) => {
@@ -188,7 +187,7 @@ impl SingleDispatch {
         _py: Python<'_>,
         cls: Bound<'_, PyAny>,
         func: Bound<'_, PyAny>,
-    ) -> PyResult<PyObject> {
+    ) -> PyResult<Py<PyAny>> {
         match func.getattr(intern!(_py, "__annotations__")) {
             Ok(_annotations) => Err(PyNotImplementedError::new_err("Oops!")),
             Err(_) => Err(PyTypeError::new_err(
@@ -239,7 +238,7 @@ impl SingleDispatch {
         }
     }
 
-    fn dispatch(&self, py: Python<'_>, cls: Bound<'_, PyAny>) -> PyResult<PyObject> {
+    fn dispatch(&self, py: Python<'_>, cls: Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         match self.lock.lock() {
             Ok(mut state) => {
                 if let Some(cache_token) = &state.cache_token {
@@ -267,7 +266,7 @@ impl SingleDispatch {
         py: Python<'_>,
         cls: Bound<'_, PyAny>,
         func: Option<Bound<'_, PyAny>>,
-    ) -> PyResult<PyObject> {
+    ) -> PyResult<Py<PyAny>> {
         let singledispatch = slf.borrow(py);
         if is_valid_dispatch_type(py, &cls) {
             match func {
@@ -293,7 +292,7 @@ impl SingleDispatch {
 #[pyclass]
 struct PartialSingleDispatchRegistration {
     singledispatch: Py<SingleDispatch>,
-    cls: PyObject,
+    cls: Py<PyAny>,
 }
 
 #[pymethods]
