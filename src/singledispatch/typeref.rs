@@ -1,17 +1,17 @@
-use pyo3::{PyObject, Python};
-use std::fmt::{Display, Formatter};
+use pyo3::prelude::*;
+use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 
 pub struct PyTypeReference {
-    wrapped: PyObject,
+    wrapped: Py<PyAny>,
 }
 
 impl PyTypeReference {
-    pub(crate) fn new(py_object: PyObject) -> Self {
+    pub(crate) fn new(py_object: Py<PyAny>) -> Self {
         PyTypeReference { wrapped: py_object }
     }
 
-    pub(crate) fn wrapped(&self) -> &PyObject {
+    pub(crate) fn wrapped(&self) -> &Py<PyAny> {
         &self.wrapped
     }
 
@@ -22,9 +22,15 @@ impl PyTypeReference {
     }
 }
 
+impl Debug for PyTypeReference {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.wrapped, f)
+    }
+}
+
 impl Display for PyTypeReference {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(&self.wrapped, f)
+        Display::fmt(&self.wrapped, f)
     }
 }
 

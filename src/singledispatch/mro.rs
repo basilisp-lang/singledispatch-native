@@ -3,7 +3,7 @@ use crate::singledispatch::typeref::PyTypeReference;
 use crate::singledispatch::typing::TypingModule;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
-use pyo3::{intern, Bound, PyObject, PyResult, Python};
+use pyo3::{intern, Bound, PyAny, PyResult, Python};
 use std::cmp::Reverse;
 use std::collections::hash_map::Keys;
 use std::collections::HashSet;
@@ -11,7 +11,7 @@ use std::collections::HashSet;
 pub(crate) fn get_obj_mro(cls: &Bound<'_, PyAny>) -> PyResult<HashSet<PyTypeReference>> {
     let mro: HashSet<_> = cls
         .getattr(intern!(cls.py(), "__mro__"))?
-        .downcast::<PyTuple>()?
+        .cast::<PyTuple>()?
         .iter()
         .map(|item| PyTypeReference::new(item.unbind()))
         .collect();
@@ -21,7 +21,7 @@ pub(crate) fn get_obj_mro(cls: &Bound<'_, PyAny>) -> PyResult<HashSet<PyTypeRefe
 fn get_obj_subclasses(cls: &Bound<'_, PyAny>) -> PyResult<HashSet<PyTypeReference>> {
     let subclasses: HashSet<_> = cls
         .call_method0(intern!(cls.py(), "__subclasses__"))?
-        .downcast::<PyTuple>()?
+        .cast::<PyTuple>()?
         .iter()
         .map(|item| PyTypeReference::new(item.unbind()))
         .collect();
@@ -29,8 +29,8 @@ fn get_obj_subclasses(cls: &Bound<'_, PyAny>) -> PyResult<HashSet<PyTypeReferenc
 }
 
 fn c3_mro(
-    py: Python,
-    cls: Bound<'_, PyAny>,
+    _py: Python,
+    _cls: Bound<'_, PyAny>,
     abcs: Vec<PyTypeReference>,
 ) -> PyResult<Vec<PyTypeReference>> {
     Ok(abcs)
@@ -39,7 +39,7 @@ fn c3_mro(
 pub(crate) fn compose_mro(
     py: Python,
     cls: Bound<'_, PyAny>,
-    types: Keys<PyTypeReference, PyObject>,
+    types: Keys<PyTypeReference, Py<PyAny>>,
 ) -> PyResult<Vec<PyTypeReference>> {
     let builtins = Builtins::cached(py);
     let typing = TypingModule::cached(py);

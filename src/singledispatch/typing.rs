@@ -1,18 +1,18 @@
 use crate::singledispatch::typeref::PyTypeReference;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
-use pyo3::sync::GILOnceCell;
+use pyo3::sync::PyOnceLock;
 use pyo3::types::PyTuple;
-use pyo3::{Bound, IntoPyObjectExt, Py, PyAny, PyObject, PyResult, Python};
+use pyo3::{Bound, IntoPyObjectExt, Py, PyAny, PyResult, Python};
 
 pub struct TypingModule {
-    get_origin: PyObject,
-    get_args: PyObject,
+    get_origin: Py<PyAny>,
+    get_args: Py<PyAny>,
     pub generic_alias_type: PyTypeReference,
     union_types: Vec<PyTypeReference>,
 }
 
-static TYPING_MODULE: GILOnceCell<TypingModule> = GILOnceCell::new();
+static TYPING_MODULE: PyOnceLock<TypingModule> = PyOnceLock::new();
 
 impl TypingModule {
     fn new(py: Python) -> Self {
@@ -58,13 +58,13 @@ impl TypingModule {
         }
     }
 
-    pub fn cached(py: Python) -> &Self {
+    pub fn cached(py: Python<'_>) -> &Self {
         TYPING_MODULE.get_or_init(py, || TypingModule::new(py))
     }
 
     pub fn get_args(&self, py: Python, cls: &Bound<'_, PyAny>) -> PyResult<Py<PyTuple>> {
         match self.get_args.call1(py, PyTuple::new(py, [cls])?) {
-            Ok(maybe_args) => match maybe_args.downcast_bound::<PyTuple>(py) {
+            Ok(maybe_args) => match maybe_args.cast_bound::<PyTuple>(py) {
                 Ok(args) => Ok(args.clone().unbind().clone_ref(py)),
                 Err(_) => Err(PyTypeError::new_err("Expected tuple return value")),
             },
@@ -72,7 +72,7 @@ impl TypingModule {
         }
     }
 
-    pub fn get_origin(&self, py: Python, cls: &Bound<'_, PyAny>) -> PyResult<PyObject> {
+    pub fn get_origin(&self, py: Python, cls: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         self.get_origin.call1(py, PyTuple::new(py, [cls])?)
     }
 
