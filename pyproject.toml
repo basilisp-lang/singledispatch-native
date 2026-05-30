@@ -9,6 +9,7 @@ dependencies = []
 [dependency-groups]
 dev = [
     "maturin",
+    "mypy",
     "pytest",
 ]
 
