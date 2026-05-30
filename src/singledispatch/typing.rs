@@ -2,12 +2,13 @@ use crate::singledispatch::typeref::PyTypeReference;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
-use pyo3::types::PyTuple;
+use pyo3::types::{PyDict, PyTuple};
 use pyo3::{Bound, IntoPyObjectExt, Py, PyAny, PyResult, Python};
 
 pub struct TypingModule {
-    get_origin: Py<PyAny>,
     get_args: Py<PyAny>,
+    get_origin: Py<PyAny>,
+    get_type_hints: Py<PyAny>,
     pub generic_alias_type: PyTypeReference,
     union_types: Vec<PyTypeReference>,
 }
@@ -47,6 +48,11 @@ impl TypingModule {
                 .unwrap()
                 .into_py_any(py)
                 .unwrap(),
+            get_type_hints: typing_module
+                .getattr("get_type_hints")
+                .unwrap()
+                .into_py_any(py)
+                .unwrap(),
             generic_alias_type: PyTypeReference::new(
                 types_module
                     .getattr("GenericAlias")
@@ -72,12 +78,29 @@ impl TypingModule {
         }
     }
 
+    pub fn get_type_hints<'py>(
+        &self,
+        py: Python<'py>,
+        obj: &Bound<'_, PyAny>,
+    ) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
+        let ret = self.get_type_hints.call1(py, PyTuple::new(py, [obj])?)?;
+        let hints = ret.cast_bound::<PyDict>(py)?;
+        match hints.iter().next() {
+            Some((argname, cls)) => Ok((argname, cls)),
+            None => Err(PyTypeError::new_err(format!(
+                "no type hints found for {obj}"
+            ))),
+        }
+    }
+
     pub fn get_origin(&self, py: Python, cls: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         self.get_origin.call1(py, PyTuple::new(py, [cls])?)
     }
 
     pub fn is_union_type(&self, py: Python, cls: &Bound<'_, PyAny>) -> PyResult<bool> {
-        let origin_type_reference = PyTypeReference::new(cls.into_py_any(py)?);
-        Ok(self.union_types.contains(&origin_type_reference))
+        Ok(self.union_types.iter().any(|v| {
+            let other_cls = &v.wrapped().bind_borrowed(py);
+            cls.is(other_cls) || cls.is_instance(other_cls).unwrap_or(false)
+        }))
     }
 }
